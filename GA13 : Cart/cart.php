@@ -1,60 +1,73 @@
 <?php
+// Start session to access cart and user data
 session_start();
 
+// Database connection details
 $host = "localhost";
 $user = "root";
 $password = "";
 $database = "fabulous_finds";
 
+// Connect to MySQL
 $conn = mysqli_connect($host, $user, $password, $database);
 
-// Check connection
+// Check database connection
 if (!$conn) {
     die("Database connection failed: " . mysqli_connect_error());
 }
 
-// ✅ Initialize cart
+// Initialize cart in session if it doesn't exist
 if(!isset($_SESSION['cart'])) $_SESSION['cart'] = [];
 
-// ✅ Handle remove item
+// Handle item removal from cart
 if(isset($_POST['remove_item'])){
     $id = $_POST['product_id'];
     unset($_SESSION['cart'][$id]);
 }
 
-// ✅ Handle update quantity via AJAX or form submission
+// Handle quantity updates
 if(isset($_POST['update_qty'])){
     $id = $_POST['product_id'];
     $qty = (int)$_POST['quantity'];
     
-    // Get product stock
+    // Check available stock for this product
     $stock_query = "SELECT StockQuantity FROM product WHERE ProductID = $id";
     $stock_result = mysqli_query($conn, $stock_query);
     $stock_row = mysqli_fetch_assoc($stock_result);
     $max_stock = $stock_row['StockQuantity'];
     
+    // Update or remove item based on quantity
     if($qty > 0 && $qty <= $max_stock) {
         $_SESSION['cart'][$id] = $qty;
     } elseif($qty > $max_stock) {
-        $_SESSION['cart'][$id] = $max_stock; // Set to max stock
+        // Set to maximum available stock
+        $_SESSION['cart'][$id] = $max_stock;
     } else {
+        // Remove item if quantity is 0 or negative
         unset($_SESSION['cart'][$id]);
     }
 }
 
-// ✅ Get cart product details with stock information
+// Fetch product details for items in cart
 $cart_items = [];
 $total = 0;
 
 if(!empty($_SESSION['cart'])){
+    // Create comma-separated list of product IDs
     $ids = implode(',', array_keys($_SESSION['cart']));
+    
+    // Query database for cart products
     $query = "SELECT ProductID, ProductName, Price, image, StockQuantity FROM product WHERE ProductID IN ($ids)";
     $result = mysqli_query($conn, $query);
+    
+    // Process each product and calculate totals
     while($row = mysqli_fetch_assoc($result)){
         $id = $row['ProductID'];
         $qty = $_SESSION['cart'][$id];
         $subtotal = $row['Price'] * $qty;
         $total += $subtotal;
+        
+        // Store product details in array
         $cart_items[] = [
             'id' => $id,
             'name' => $row['ProductName'],
@@ -79,21 +92,31 @@ if(!empty($_SESSION['cart'])){
 </head>
 <body>
 
+<!-- Site header with navigation -->
 <header>
   <div class="top-header">
     <div class="logo">Fabulous Finds</div>
 
+    <!-- Search bar with icon -->
+    <div class="search-bar">
+      <span class="material-symbols-outlined">search</span>
+      <input type="text" placeholder="Search for items...">
+    </div>
+
+    <!-- User action links -->
     <div class="userlinks">
+      <!-- Cart link with item count badge -->
       <a href="cart.php" class="icon-link">
         <span class="material-symbols-outlined">shopping_cart</span>
         <span class="cart-badge"><?php echo isset($_SESSION['cart']) ? array_sum($_SESSION['cart']) : 0; ?></span>
       </a>
 
+      <!-- Order history link -->
       <a href="orderlist.php" class="icon-link">
         <span class="material-symbols-outlined">local_shipping</span>
       </a>
 
-      <!-- 🔸 Profile Dropdown -->
+      <!-- Profile dropdown menu -->
       <div class="profile-dropdown">
         <button id="profile-btn">
           <span class="material-symbols-outlined">account_circle</span>
@@ -102,27 +125,30 @@ if(!empty($_SESSION['cart'])){
           <a href="#">Edit Profile</a>
           <a href="#">Add Address</a>
           <a href="#">Settings</a>
-          <a href="logout.php">Logout</a>
+          <a href="../logout.php">Logout</a>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Main navigation -->
   <nav class="menu">
     <a href="index.php">Home</a>
-    <a href="shop.php">Shop</a>
+    <a href="shop.php">Product</a>
     <a href="contact.php">Contact</a>
   </nav>
 </header>
 
-
+<!-- Main content area -->
 <main>
   <h1 style="text-align:center; margin:30px 0;">🛒 Your Shopping Cart</h1>
 
+  <!-- Show empty cart message or cart contents -->
   <?php if(empty($cart_items)): ?>
     <p style="text-align:center; font-size:1.1rem;">Your cart is empty 😔</p>
   <?php else: ?>
   <div class="cart-container">
+    <!-- Cart items table -->
     <table>
       <tr>
         <th>Product</th>
@@ -131,13 +157,17 @@ if(!empty($_SESSION['cart'])){
         <th>Subtotal</th>
         <th>Action</th>
       </tr>
+      <!-- Loop through cart items -->
       <?php foreach($cart_items as $item): ?>
       <tr data-product-id="<?php echo $item['id']; ?>">
+        <!-- Product image and name -->
         <td class="product-info">
           <img src="../assets/img/<?php echo $item['image']; ?>" alt="">
           <span><?php echo $item['name']; ?></span>
         </td>
+        <!-- Product price -->
         <td class="price">₱<?php echo number_format($item['price'], 2); ?></td>
+        <!-- Quantity input with stock limit -->
         <td>
           <form method="post" class="qty-form">
             <input type="hidden" name="product_id" value="<?php echo $item['id']; ?>">
@@ -149,7 +179,9 @@ if(!empty($_SESSION['cart'])){
             <div class="stock-info">Available: <?php echo $item['stock']; ?></div>
           </form>
         </td>
+        <!-- Item subtotal (price × quantity) -->
         <td class="subtotal">₱<?php echo number_format($item['subtotal'], 2); ?></td>
+        <!-- Remove item button -->
         <td>
           <form method="post">
             <input type="hidden" name="product_id" value="<?php echo $item['id']; ?>">
@@ -160,6 +192,7 @@ if(!empty($_SESSION['cart'])){
       <?php endforeach; ?>
     </table>
 
+    <!-- Checkout section -->
     <div class="cart-summary">
       <a href="checkout.php" class="btn-checkout">Proceed to Checkout</a>
     </div>
@@ -167,8 +200,9 @@ if(!empty($_SESSION['cart'])){
   <?php endif; ?>
 </main>
 
+<!-- JavaScript for cart interactions -->
 <script>
-  // 🔸 Dropdown toggle logic
+  // Toggle profile dropdown menu
   const profileBtn = document.getElementById("profile-btn");
   const dropdownMenu = document.getElementById("dropdown-menu");
 
@@ -176,25 +210,26 @@ if(!empty($_SESSION['cart'])){
     dropdownMenu.classList.toggle("show");
   });
 
-  // 🔸 Close dropdown kapag pinindot sa labas
+  // Close dropdown when clicking outside
   window.addEventListener("click", (e) => {
     if (!profileBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
       dropdownMenu.classList.remove("show");
     }
   });
 
-  // 🔸 Auto-update price and cart when quantity changes
+  // Handle quantity changes with real-time updates
   document.addEventListener('DOMContentLoaded', function() {
     const quantityInputs = document.querySelectorAll('.quantity-input');
     
     quantityInputs.forEach(input => {
+      // Update on quantity change
       input.addEventListener('change', function() {
         validateQuantity(this);
         updateProductPrice(this);
         updateCartSession(this);
       });
       
-      // Optional: Also update on input for real-time feedback
+      // Real-time feedback on input
       input.addEventListener('input', function() {
         validateQuantity(this);
         updateProductPrice(this);
@@ -202,6 +237,7 @@ if(!empty($_SESSION['cart'])){
     });
   });
 
+  // Validate quantity against stock limits
   function validateQuantity(input) {
     const quantity = parseInt(input.value) || 0;
     const maxStock = parseInt(input.dataset.stock);
@@ -216,6 +252,7 @@ if(!empty($_SESSION['cart'])){
     }
   }
 
+  // Update product subtotal when quantity changes
   function updateProductPrice(input) {
     const quantity = parseInt(input.value) || 0;
     const price = parseFloat(input.dataset.price);
@@ -225,13 +262,14 @@ if(!empty($_SESSION['cart'])){
     // Calculate new subtotal
     const newSubtotal = quantity * price;
     
-    // Update subtotal display
+    // Update display
     subtotalElement.textContent = '₱' + newSubtotal.toFixed(2);
     
     // Update cart total
     updateCartTotal();
   }
 
+  // Calculate and update total cart value
   function updateCartTotal() {
     const subtotalElements = document.querySelectorAll('.subtotal');
     let newTotal = 0;
@@ -241,25 +279,27 @@ if(!empty($_SESSION['cart'])){
       newTotal += parseFloat(subtotalText);
     });
     
-    // Update total display
-    document.getElementById('cart-total').textContent = newTotal.toFixed(2);
+    // This function needs a cart-total element to update
+    // Currently missing in HTML, could be added to cart-summary
+    // document.getElementById('cart-total').textContent = newTotal.toFixed(2);
   }
 
+  // Send AJAX request to update cart in session
   function updateCartSession(input) {
     const form = input.closest('form');
     const formData = new FormData(form);
     
-    // Add the update_qty action
+    // Mark this as a quantity update request
     formData.append('update_qty', '1');
     
-    // Submit the form silently
+    // Send to server without page reload
     fetch('cart.php', {
       method: 'POST',
       body: formData
     })
     .then(response => response.text())
     .then(data => {
-      // Update cart badge if needed
+      // Cart updated successfully
       updateCartBadge();
     })
     .catch(error => {
@@ -267,15 +307,15 @@ if(!empty($_SESSION['cart'])){
     });
   }
 
+  // Update cart badge count
   function updateCartBadge() {
-    // You can implement this to update the cart badge count
-    // This would require additional AJAX to get the total count
-    // For now, we'll just reload the page to reflect changes
+    // Reload page to show updated cart
     setTimeout(() => {
       window.location.reload();
     }, 1500);
   }
 
+  // Show temporary notification messages
   function showMessage(message, type) {
     // Remove existing messages
     const existingMessage = document.querySelector('.cart-message');
@@ -283,10 +323,12 @@ if(!empty($_SESSION['cart'])){
       existingMessage.remove();
     }
     
-    // Create message element
+    // Create notification element
     const messageDiv = document.createElement('div');
     messageDiv.className = `cart-message ${type}`;
     messageDiv.textContent = message;
+    
+    // Style the message
     messageDiv.style.cssText = `
       position: fixed;
       top: 20px;
@@ -302,7 +344,7 @@ if(!empty($_SESSION['cart'])){
     
     document.body.appendChild(messageDiv);
     
-    // Remove message after 3 seconds
+    // Auto-remove after 3 seconds
     setTimeout(() => {
       messageDiv.remove();
     }, 3000);

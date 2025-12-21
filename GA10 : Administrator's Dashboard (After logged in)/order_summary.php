@@ -1,12 +1,14 @@
 <?php
+// Start session for admin authentication
 session_start();
 
-// Direct database connection
+// Database connection configuration
 $host = "localhost";
 $user = "root";
 $password = "";
 $database = "fabulous_finds";
 
+// Establish database connection
 $conn = mysqli_connect($host, $user, $password, $database);
 
 // Check connection
@@ -14,34 +16,34 @@ if (!$conn) {
   die("Database connection failed: " . mysqli_connect_error());
 }
 
-// Fetch order summary - EXCLUDE CANCELLED ORDERS
+// Fetch 30-day order summary statistics
 $summary_query = "
     SELECT 
-        COUNT(*) as total_orders,
-        SUM(py.Amount) as total_revenue,
-        AVG(py.Amount) as avg_order_value,
-        COUNT(DISTINCT o.UserID) as unique_customers
+        COUNT(*) as total_orders,               -- Total number of orders
+        SUM(py.Amount) as total_revenue,        -- Sum of all payments
+        AVG(py.Amount) as avg_order_value,      -- Average order value
+        COUNT(DISTINCT o.UserID) as unique_customers -- Unique customers
     FROM orders o
     LEFT JOIN payment py ON o.OrderID = py.OrderID
-    WHERE o.OrderDate >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    AND o.Status != 'Cancelled'
-    AND o.Status != 'Pending'
+    WHERE o.OrderDate >= DATE_SUB(NOW(), INTERVAL 30 DAY) -- Last 30 days
+    AND o.Status != 'Cancelled'                 -- Exclude cancelled orders
+    AND o.Status != 'Pending'                   -- Exclude pending orders
 ";
 $summary_result = $conn->query($summary_query);
 $summary = $summary_result->fetch_assoc();
 
-// Top selling products - EXCLUDE CANCELLED ORDERS
+// Fetch top 5 selling products in the last 30 days
 $top_products_query = "
     SELECT p.ProductName, SUM(od.Quantity) as total_sold
     FROM orderdetails od
     JOIN product p ON od.ProductID = p.ProductID
     JOIN orders o ON od.OrderID = o.OrderID
-    WHERE o.OrderDate >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    AND o.Status != 'Cancelled'
-    AND o.Status != 'Pending'
-    GROUP BY p.ProductID
-    ORDER BY total_sold DESC
-    LIMIT 5
+    WHERE o.OrderDate >= DATE_SUB(NOW(), INTERVAL 30 DAY) -- Last 30 days
+    AND o.Status != 'Cancelled'                 -- Exclude cancelled orders
+    AND o.Status != 'Pending'                   -- Exclude pending orders
+    GROUP BY p.ProductID                        -- Group by product
+    ORDER BY total_sold DESC                    -- Sort by most sold first
+    LIMIT 5                                     -- Top 5 products only
 ";
 $top_products_result = $conn->query($top_products_query);
 ?>
@@ -58,17 +60,24 @@ $top_products_result = $conn->query($top_products_query);
 </head>
 
 <body>
+  <!-- Main admin container -->
   <div class="container">
+    
+    <!-- Left sidebar navigation -->
     <aside>
       <div class="top">
+        <!-- Brand logo and name -->
         <div class="logo">
           <img src="../assets/img/Fabulous-finds.png" alt="Logo" class="site-logo" />
           <h2>FABULOUS <span class="primary">FINDS</span></h2>
         </div>
+        <!-- Close button for mobile -->
         <div class="close" id="close-btn">
           <span class="material-icons-sharp">close</span>
         </div>
       </div>
+      
+      <!-- Navigation menu -->
       <div class="sidebar">
         <a href="index.php">
           <span class="material-icons-sharp">grid_view</span>
@@ -82,6 +91,7 @@ $top_products_result = $conn->query($top_products_query);
           <span class="material-icons-sharp">receipt_long</span>
           <h3>Orders</h3>
         </a>
+        <!-- Current page - active -->
         <a href="order_summary.php" class="active">
           <span class="material-icons-sharp">summarize</span>
           <h3>Order Summary</h3>
@@ -102,15 +112,22 @@ $top_products_result = $conn->query($top_products_query);
           <span class="material-icons-sharp">add</span>
           <h3>Add Product</h3>
         </a>
+        <!-- Logout link -->
         <a href="logout.php">
           <span class="material-icons-sharp">logout</span>
           <h3>Logout</h3>
         </a>
       </div>
     </aside>
+    
+    <!-- Main content area -->
     <main>
       <h1>Order Summary</h1>
+      
+      <!-- Summary statistics cards -->
       <div class="insights">
+        
+        <!-- Total Orders card -->
         <div class="sales">
           <span class="material-icons-sharp">analytics</span>
           <div class="middle">
@@ -120,6 +137,8 @@ $top_products_result = $conn->query($top_products_query);
             </div>
           </div>
         </div>
+        
+        <!-- Total Revenue card -->
         <div class="expenses">
           <span class="material-icons-sharp">bar_chart</span>
           <div class="middle">
@@ -129,6 +148,8 @@ $top_products_result = $conn->query($top_products_query);
             </div>
           </div>
         </div>
+        
+        <!-- Average Order Value card -->
         <div class="income">
           <span class="material-icons-sharp">stacked_line_chart</span>
           <div class="middle">
@@ -139,6 +160,8 @@ $top_products_result = $conn->query($top_products_query);
           </div>
         </div>
       </div>
+      
+      <!-- Top selling products table -->
       <div class="recent-orders">
         <h2>Top Selling Products (Last 30 Days)</h2>
         <table>
@@ -149,6 +172,7 @@ $top_products_result = $conn->query($top_products_query);
             </tr>
           </thead>
           <tbody>
+            <!-- Loop through top selling products -->
             <?php while ($product = $top_products_result->fetch_assoc()): ?>
               <tr>
                 <td><?php echo $product['ProductName']; ?></td>
@@ -159,15 +183,22 @@ $top_products_result = $conn->query($top_products_query);
         </table>
       </div>
     </main>
+    
+    <!-- Right sidebar -->
     <div class="right">
       <div class="top">
+        <!-- Mobile menu toggle -->
         <button id="menu-btn">
           <span class="primary material-icons-sharp">menu</span>
         </button>
+        
+        <!-- Theme toggle -->
         <div class="theme-toggler">
           <span class="material-icons-sharp active">light_mode</span>
           <span class="material-icons-sharp">dark_mode</span>
         </div>
+        
+        <!-- Admin profile section -->
         <div class="profile">
           <div class="info">
             <p>Hey, <b>Admin</b></p>
@@ -180,9 +211,13 @@ $top_products_result = $conn->query($top_products_query);
       </div>
     </div>
   </div>
-  </div>
+  
+  <!-- Admin dashboard JavaScript -->
   <script src="../assets/js/admin-js.js"></script>
 </body>
 
 </html>
-<?php $conn->close(); ?>
+<?php 
+// Close database connection
+$conn->close(); 
+?>

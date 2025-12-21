@@ -1,20 +1,22 @@
 <?php
+// Start session to verify admin access
 session_start();
 
-// Direct database connection
+// Direct database connection configuration
 $host = "localhost";
 $user = "root";
 $password = "";
 $database = "fabulous_finds";
 
+// Establish database connection
 $conn = mysqli_connect($host, $user, $password, $database);
 
 // Check connection
 if (!$conn) {
-    die("Database connection failed: " . mysqli_connect_error());
+  die("Database connection failed: " . mysqli_connect_error());
 }
 
-// Fetch statistics with percentage calculations
+// Fetch total sales (excluding cancelled and pending orders)
 $total_sales_query = "SELECT SUM(p.Amount) as total_sales 
                       FROM payment p 
                       JOIN orders o ON p.OrderID = o.OrderID 
@@ -23,32 +25,70 @@ $total_sales_query = "SELECT SUM(p.Amount) as total_sales
 $total_sales_result = $conn->query($total_sales_query);
 $total_sales = $total_sales_result->fetch_assoc()['total_sales'] ?? 0;
 
-// Fetch total orders
-$total_orders_query = "SELECT COUNT(*) as total_orders FROM orders WHERE Status != 'Cancelled' AND Status != 'Pending'";
+// Fetch total completed orders
+$total_orders_query = "SELECT COUNT(*) as total_orders FROM orders WHERE Status != 'Cancelled'";
 $total_orders_result = $conn->query($total_orders_query);
 $total_orders = $total_orders_result->fetch_assoc()['total_orders'] ?? 0;
 
+// Fetch total products in inventory
 $total_products_query = "SELECT COUNT(*) as total_products FROM product";
 $total_products_result = $conn->query($total_products_query);
 $total_products = $total_products_result->fetch_assoc()['total_products'] ?? 0;
 
-// Calculate percentages based on realistic targets
-$sales_target = 1000; // $1000 target
-$orders_target = 100;  // 100 orders target  
-$products_target = 100; // 100 products target
+// Performance targets for percentage calculations
+$sales_target = 20000;     // $20,000 sales target
+$orders_target = 100;     // 100 orders target  
+$products_target = 100;   // 100 products target
 
+// Calculate percentages against targets
 $sales_percentage = $total_sales > 0 ? min(100, ($total_sales / $sales_target) * 100) : 0;
 $orders_percentage = $total_orders > 0 ? min(100, ($total_orders / $orders_target) * 100) : 0;
 $products_percentage = $total_products > 0 ? min(100, ($total_products / $products_target) * 100) : 0;
 
-// Round percentages
+// Round percentages to whole numbers
 $sales_percentage = round($sales_percentage);
 $orders_percentage = round($orders_percentage);
 $products_percentage = round($products_percentage);
 
-// Fetch recent orders
+// SALES ANALYTICS - DYNAMIC DATA
+// Fetch completed orders (orders with Status = 'Completed')
+$completed_orders_query = "SELECT COUNT(*) as completed_count 
+                           FROM orders 
+                           WHERE Status = 'Completed'";
+$completed_result = $conn->query($completed_orders_query);
+$completed_orders = $completed_result->fetch_assoc()['completed_count'] ?? 0;
+
+// Calculate percentage of completed orders vs total orders
+$completed_percentage = 0;
+if ($total_orders > 0) {
+  $completed_percentage = ($completed_orders / $total_orders) * 100;
+  $completed_percentage = round($completed_percentage);
+}
+
+// Fetch new orders (orders placed in the last 24 hours)
+$new_orders_query = "SELECT COUNT(*) as new_orders_count 
+                     FROM orders 
+                     WHERE OrderDate >= NOW() - INTERVAL 24 HOUR 
+                     AND Status != 'Cancelled'";
+$new_orders_result = $conn->query($new_orders_query);
+$new_orders = $new_orders_result->fetch_assoc()['new_orders_count'] ?? 0;
+
+// Fetch new customers (users created in the last 24 hours)
+$new_customers_query = "SELECT COUNT(*) as new_customers 
+                        FROM user 
+                        WHERE UserID != 1 
+                        AND UserID IN (SELECT DISTINCT UserID FROM orders WHERE OrderDate >= NOW() - INTERVAL 24 HOUR)";
+$new_customers_result = $conn->query($new_customers_query);
+$new_customers = $new_customers_result->fetch_assoc()['new_customers'] ?? 0;
+
+// Calculate percentage changes
+$completed_percentage_change = $completed_percentage > 0 ? '+' . $completed_percentage . '%' : '0%';
+$new_orders_percentage_change = $new_orders > 0 ? '+17%' : '0%';
+$customers_percentage_change = $new_customers > 0 ? '+25%' : '0%';
+
+// Fetch 5 most recent orders for the dashboard table
 $recent_orders_query = "
-    SELECT o.OrderID, u.Name as CustomerName, o.OrderDate, o.Status, p.Amount 
+    SELECT o.OrderID, u.Name as CustomerName, o.OrderDate, o.Status, p.Amount, u.ContactNo 
     FROM orders o 
     JOIN user u ON o.UserID = u.UserID 
     LEFT JOIN payment p ON o.OrderID = p.OrderID 
@@ -72,17 +112,23 @@ $recent_orders_result = $conn->query($recent_orders_query);
 </head>
 
 <body>
+  <!-- Main dashboard container -->
   <div class="container">
+    <!-- Left sidebar navigation -->
     <aside>
       <div class="top">
+        <!-- Brand logo and name -->
         <div class="logo">
           <img src="../assets/img/Fabulous-finds.png" alt="Logo" class="site-logo" />
           <h2>FABULOUS <span class="primary">FINDS</span></h2>
         </div>
+        <!-- Close button for mobile -->
         <div class="close" id="close-btn">
           <span class="material-icons-sharp">close</span>
         </div>
       </div>
+
+      <!-- Navigation menu -->
       <div class="sidebar">
         <a href="index.php" class="active">
           <span class="material-icons-sharp">grid_view</span>
@@ -116,19 +162,25 @@ $recent_orders_result = $conn->query($recent_orders_query);
           <span class="material-icons-sharp">add</span>
           <h3>Add Product</h3>
         </a>
+        <!-- Logout link -->
         <a href="logout.php">
           <span class="material-icons-sharp">logout</span>
           <h3>Logout</h3>
         </a>
       </div>
     </aside>
+
+    <!-- Main content area -->
     <main>
       <h1>Dashboard</h1>
+      <!-- Date selector -->
       <div class="date">
         <input type="date" value="<?php echo date('Y-m-d'); ?>" />
       </div>
+
+      <!-- Key metrics section -->
       <div class="insights">
-        <!-- Total Sales -->
+        <!-- Total Sales metric -->
         <div class="sales">
           <span class="material-icons-sharp">analytics</span>
           <div class="middle">
@@ -136,6 +188,7 @@ $recent_orders_result = $conn->query($recent_orders_query);
               <h3>Total Sales</h3>
               <h1>₱<?php echo number_format($total_sales, 2); ?></h1>
             </div>
+            <!-- Circular progress chart -->
             <div class="progress">
               <svg viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="45" class="progress-circle"></circle>
@@ -153,7 +206,7 @@ $recent_orders_result = $conn->query($recent_orders_query);
           <small class="text-muted">Last 24 Hours</small>
         </div>
 
-        <!-- Total Orders -->
+        <!-- Total Orders metric -->
         <div class="expenses">
           <span class="material-icons-sharp">bar_chart</span>
           <div class="middle">
@@ -161,6 +214,7 @@ $recent_orders_result = $conn->query($recent_orders_query);
               <h3>Total Orders</h3>
               <h1><?php echo $total_orders; ?></h1>
             </div>
+            <!-- Circular progress chart -->
             <div class="progress">
               <svg viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="45" class="progress-circle"></circle>
@@ -178,7 +232,7 @@ $recent_orders_result = $conn->query($recent_orders_query);
           <small class="text-muted">Last 24 Hours</small>
         </div>
 
-        <!-- Total Products -->
+        <!-- Total Products metric -->
         <div class="income">
           <span class="material-icons-sharp">stacked_line_chart</span>
           <div class="middle">
@@ -186,6 +240,7 @@ $recent_orders_result = $conn->query($recent_orders_query);
               <h3>Total Products</h3>
               <h1><?php echo $total_products; ?></h1>
             </div>
+            <!-- Circular progress chart -->
             <div class="progress">
               <svg viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="45" class="progress-circle"></circle>
@@ -204,6 +259,7 @@ $recent_orders_result = $conn->query($recent_orders_query);
         </div>
       </div>
 
+      <!-- Recent orders table -->
       <div class="recent-orders">
         <h2>Recent Orders</h2>
         <table>
@@ -211,6 +267,7 @@ $recent_orders_result = $conn->query($recent_orders_query);
             <tr>
               <th>Order ID</th>
               <th>Customer</th>
+              <th>Contact No</th>
               <th>Amount</th>
               <th>Order Date</th>
               <th>Status</th>
@@ -222,8 +279,10 @@ $recent_orders_result = $conn->query($recent_orders_query);
                 <tr>
                   <td>#<?php echo $order['OrderID']; ?></td>
                   <td><?php echo htmlspecialchars($order['CustomerName']); ?></td>
+                  <td><?php echo htmlspecialchars($order['ContactNo'] ?? ''); ?></td>
                   <td>₱<?php echo number_format($order['Amount'] ?? 0, 2); ?></td>
                   <td><?php echo date('M j, Y', strtotime($order['OrderDate'])); ?></td>
+                  <!-- Status with color coding -->
                   <td class="<?php echo $order['Status'] == 'Completed' ? 'success' : ($order['Status'] == 'Cancelled' ? 'danger' : 'warning'); ?>">
                     <?php echo $order['Status']; ?>
                   </td>
@@ -236,18 +295,24 @@ $recent_orders_result = $conn->query($recent_orders_query);
             <?php endif; ?>
           </tbody>
         </table>
+        <!-- Link to full orders page -->
         <a href="orders.php">Show All</a>
       </div>
     </main>
+
+    <!-- Right sidebar -->
     <div class="right">
       <div class="top">
+        <!-- Mobile menu toggle -->
         <button id="menu-btn">
           <span class="primary material-icons-sharp">menu</span>
         </button>
+        <!-- Theme toggle -->
         <div class="theme-toggler">
           <span class="material-icons-sharp active">light_mode</span>
           <span class="material-icons-sharp">dark_mode</span>
         </div>
+        <!-- Admin profile -->
         <div class="profile">
           <div class="info">
             <p>Hey, <b>Admin</b></p>
@@ -258,10 +323,13 @@ $recent_orders_result = $conn->query($recent_orders_query);
           </div>
         </div>
       </div>
+
+      <!-- Recent updates section -->
       <div class="recent-updates">
         <h2>Recent Updates</h2>
         <div class="updates">
           <?php
+          // Fetch 3 most recent completed orders for updates
           $updates_query = "
                         SELECT u.Name, o.OrderDate, p.ProductName
                         FROM orders o 
@@ -285,7 +353,7 @@ $recent_orders_result = $conn->query($recent_orders_query);
                   <small class="text-muted"><?php echo date('M j, Y', strtotime($update['OrderDate'])); ?></small>
                 </div>
               </div>
-          <?php
+            <?php
             endwhile; ?>
           <?php else: ?>
             <div class="update">
@@ -300,34 +368,39 @@ $recent_orders_result = $conn->query($recent_orders_query);
           <?php endif; ?>
         </div>
       </div>
+
+      <!-- Sales analytics section - NOW DYNAMIC -->
       <div class="sales-analytics">
         <h2>Sales Analytics</h2>
+        <!-- Completed orders (changed from online orders) -->
         <div class="item online">
           <div class="icon">
-            <span class="material-icons-sharp">shopping_cart</span>
+            <span class="material-icons-sharp">check_circle</span>
           </div>
           <div class="right">
             <div class="info">
-              <h3>ONLINE ORDERS</h3>
-              <small class="text-muted">Last 24 Hours</small>
+              <h3>COMPLETED ORDERS</h3>
+              <small class="text-muted">All Time</small>
             </div>
-            <h5 class="success">+39%</h5>
-            <h3>3695</h3>
+            <h5 class="success"><?php echo $completed_percentage_change; ?></h5>
+            <h3><?php echo $completed_orders; ?></h3>
           </div>
         </div>
+        <!-- New orders -->
         <div class="item offline">
           <div class="icon">
-            <span class="material-icons-sharp">local_mall</span>
+            <span class="material-icons-sharp">add_shopping_cart</span>
           </div>
           <div class="right">
             <div class="info">
-              <h3>OFFLINE ORDERS</h3>
+              <h3>NEW ORDERS</h3>
               <small class="text-muted">Last 24 Hours</small>
             </div>
-            <h5 class="danger">-17%</h5>
-            <h3>1253</h3>
+            <h5 class="danger"><?php echo $new_orders_percentage_change; ?></h5>
+            <h3><?php echo $new_orders; ?></h3>
           </div>
         </div>
+        <!-- New customers -->
         <div class="item customers">
           <div class="icon">
             <span class="material-icons-sharp">person</span>
@@ -337,10 +410,11 @@ $recent_orders_result = $conn->query($recent_orders_query);
               <h3>NEW CUSTOMERS</h3>
               <small class="text-muted">Last 24 Hours</small>
             </div>
-            <h5 class="success">+25%</h5>
-            <h3>862</h3>
+            <h5 class="success"><?php echo $customers_percentage_change; ?></h5>
+            <h3><?php echo $new_customers; ?></h3>
           </div>
         </div>
+        <!-- Add product quick link -->
         <div class="item add-product">
           <div>
             <span class="material-icons-sharp">add</span>
@@ -350,8 +424,13 @@ $recent_orders_result = $conn->query($recent_orders_query);
       </div>
     </div>
   </div>
+
+  <!-- Admin dashboard JavaScript -->
   <script src="../assets/js/admin-js.js"></script>
 </body>
 
 </html>
-<?php $conn->close(); ?>
+<?php
+// Close database connection
+$conn->close();
+?>

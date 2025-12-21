@@ -1,12 +1,14 @@
 <?php
+// Start session for admin authentication
 session_start();
 
-// Direct database connection
+// Database connection configuration
 $host = "localhost";
 $user = "root";
 $password = "";
 $database = "fabulous_finds";
 
+// Establish database connection
 $conn = mysqli_connect($host, $user, $password, $database);
 
 // Check connection
@@ -14,9 +16,9 @@ if (!$conn) {
   die("Database connection failed: " . mysqli_connect_error());
 }
 
-// Fetch complete order history
+// Fetch complete order history with multiple table joins
 $history_query = "
-    SELECT o.OrderID, u.Name as CustomerName, s.Name as SellerName, 
+    SELECT o.OrderID, u.Name as CustomerName, u.ContactNo, s.Name as SellerName, 
            p.ProductName, od.Quantity, py.Amount, o.OrderDate, o.Status,
            py.PaymentMethod, py.PaymentDate
     FROM orders o
@@ -41,18 +43,25 @@ $history_result = $conn->query($history_query);
   <title>Order History - Fabulous Finds</title>
 </head>
 
-<body">
+<body>
+  <!-- Main admin container -->
   <div class="container">
+    
+    <!-- Left sidebar navigation -->
     <aside>
       <div class="top">
+        <!-- Brand logo and name -->
         <div class="logo">
           <img src="../assets/img/Fabulous-finds.png" alt="Logo" class="site-logo" />
           <h2>FABULOUS <span class="primary">FINDS</span></h2>
         </div>
+        <!-- Close button for mobile -->
         <div class="close" id="close-btn">
           <span class="material-icons-sharp">close</span>
         </div>
       </div>
+      
+      <!-- Navigation menu -->
       <div class="sidebar">
         <a href="index.php">
           <span class="material-icons-sharp">grid_view</span>
@@ -70,6 +79,7 @@ $history_result = $conn->query($history_query);
           <span class="material-icons-sharp">summarize</span>
           <h3>Order Summary</h3>
         </a>
+        <!-- Current page - active -->
         <a href="order_history.php" class="active">
           <span class="material-icons-sharp">history</span>
           <h3>Order History</h3>
@@ -86,21 +96,27 @@ $history_result = $conn->query($history_query);
           <span class="material-icons-sharp">add</span>
           <h3>Add Product</h3>
         </a>
+        <!-- Logout link -->
         <a href="logout.php">
           <span class="material-icons-sharp">logout</span>
           <h3>Logout</h3>
         </a>
       </div>
     </aside>
+    
+    <!-- Main content area -->
     <main>
       <h1>Order History</h1>
       <div class="recent-orders">
         <h2>Complete Order History</h2>
+        
+        <!-- Order history table -->
         <table>
           <thead>
             <tr>
               <th>Order ID</th>
               <th>Customer</th>
+              <th>Contact No</th>
               <th>Product</th>
               <th>Quantity</th>
               <th>Amount</th>
@@ -110,16 +126,34 @@ $history_result = $conn->query($history_query);
             </tr>
           </thead>
           <tbody>
+            <!-- Loop through each order in history -->
             <?php while ($order = $history_result->fetch_assoc()): ?>
               <tr>
+                <!-- Order ID with hash prefix -->
                 <td>#<?php echo $order['OrderID']; ?></td>
+                
+                <!-- Customer name -->
                 <td><?php echo $order['CustomerName']; ?></td>
+
+                <!-- Customer contact number -->
+                <td><?php echo $order['ContactNo'] ?? ''; ?></td>
+                
+                <!-- Product name -->
                 <td><?php echo $order['ProductName']; ?></td>
+                
+                <!-- Quantity ordered -->
                 <td><?php echo $order['Quantity']; ?></td>
+                
+                <!-- Order amount with currency formatting -->
                 <td>₱<?php echo number_format($order['Amount'] ?? 0, 2); ?></td>
+                
+                <!-- Order date and time -->
                 <td><?php echo date('M j, Y H:i', strtotime($order['OrderDate'])); ?></td>
+                
+                <!-- Payment method with formatted display -->
                 <td><?php 
                   if (isset($order['PaymentMethod'])) {
+                    // Convert payment codes to readable names
                     if ($order['PaymentMethod'] == 'gcash') {
                       echo 'GCash';
                     } elseif ($order['PaymentMethod'] == 'paymaya') {
@@ -128,11 +162,13 @@ $history_result = $conn->query($history_query);
                       echo 'Cash on Delivery';
                     } else {
                       echo $order['PaymentMethod'];
-                  }
+                    }
                   } else {
                     echo 'N/A';
                   }
                 ?></td>
+                
+                <!-- Order status with color-coded classes -->
                 <td class="<?php
                             if ($order['Status'] == 'Completed') echo 'success';
                             elseif ($order['Status'] == 'Pending') echo 'warning';
@@ -146,15 +182,22 @@ $history_result = $conn->query($history_query);
         </table>
       </div>
     </main>
+    
+    <!-- Right sidebar -->
     <div class="right">
       <div class="top">
+        <!-- Mobile menu toggle -->
         <button id="menu-btn">
           <span class="primary material-icons-sharp">menu</span>
         </button>
+        
+        <!-- Theme toggle -->
         <div class="theme-toggler">
           <span class="material-icons-sharp active">light_mode</span>
           <span class="material-icons-sharp">dark_mode</span>
         </div>
+        
+        <!-- Admin profile section -->
         <div class="profile">
           <div class="info">
             <p>Hey, <b>Admin</b></p>
@@ -167,9 +210,13 @@ $history_result = $conn->query($history_query);
       </div>
     </div>
   </div>
-  </div>
+  
+  <!-- Admin dashboard JavaScript -->
   <script src="../assets/js/admin-js.js"></script>
-  </body>
+</body>
 
 </html>
-<?php $conn->close(); ?>
+<?php 
+// Close database connection
+$conn->close(); 
+?>

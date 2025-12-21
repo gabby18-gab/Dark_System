@@ -1,12 +1,14 @@
 <?php
+// Start session for admin authentication
 session_start();
 
-// Direct database connection
+// Database connection configuration
 $host = "localhost";
 $user = "root";
 $password = "";
 $database = "fabulous_finds";
 
+// Establish database connection
 $conn = mysqli_connect($host, $user, $password, $database);
 
 // Check connection
@@ -14,9 +16,9 @@ if (!$conn) {
   die("Database connection failed: " . mysqli_connect_error());
 }
 
-// Fetch orders for invoice generation
+// Fetch orders for invoice generation with multiple table joins
 $invoices_query = "
-    SELECT o.OrderID, u.Name as CustomerName, u.Email, u.Address,
+    SELECT o.OrderID, u.Name as CustomerName, u.Email, u.Address, u.ContactNo,
            s.Name as SellerName, s.ContactInfo as SellerContact,
            p.ProductName, p.Price, od.Quantity,
            py.Amount, py.PaymentMethod, py.PaymentDate,
@@ -42,7 +44,10 @@ $invoices_result = $conn->query($invoices_query);
   <link rel="icon" type="image/png" href="../assets/img/Fabulous-finds.png" />
   <link rel="stylesheet" href="../assets/css/admin-style.css" />
   <title>Invoices - Fabulous Finds</title>
+  
+  <!-- Invoice-specific styling -->
   <style>
+    /* Invoice container styling */
     .invoice-container {
       background: var(--color-white);
       padding: var(--card-padding);
@@ -51,6 +56,7 @@ $invoices_result = $conn->query($invoices_query);
       margin-top: 1rem;
     }
 
+    /* Invoice header with company and invoice info */
     .invoice-header {
       display: flex;
       justify-content: space-between;
@@ -59,6 +65,7 @@ $invoices_result = $conn->query($invoices_query);
       padding-bottom: 1rem;
     }
 
+    /* Two-column layout for customer and seller info */
     .invoice-details {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -66,6 +73,7 @@ $invoices_result = $conn->query($invoices_query);
       margin-bottom: 2rem;
     }
 
+    /* Invoice items table styling */
     .invoice-items table {
       width: 100%;
       border-collapse: collapse;
@@ -78,6 +86,7 @@ $invoices_result = $conn->query($invoices_query);
       text-align: left;
     }
 
+    /* Total amount section */
     .invoice-total {
       text-align: right;
       margin-top: 1rem;
@@ -85,6 +94,7 @@ $invoices_result = $conn->query($invoices_query);
       font-weight: bold;
     }
 
+    /* Print button styling */
     .print-btn {
       margin-top: 1rem;
       background: var(--color-primary);
@@ -97,18 +107,25 @@ $invoices_result = $conn->query($invoices_query);
   </style>
 </head>
 
-<body">
+<body>
+  <!-- Main admin container -->
   <div class="container">
+    
+    <!-- Left sidebar navigation -->
     <aside>
       <div class="top">
+        <!-- Brand logo and name -->
         <div class="logo">
           <img src="../assets/img/Fabulous-finds.png" alt="Logo" class="site-logo" />
           <h2>FABULOUS <span class="primary">FINDS</span></h2>
         </div>
+        <!-- Close button for mobile -->
         <div class="close" id="close-btn">
           <span class="material-icons-sharp">close</span>
         </div>
       </div>
+      
+      <!-- Navigation menu -->
       <div class="sidebar">
         <a href="index.php">
           <span class="material-icons-sharp">grid_view</span>
@@ -130,6 +147,7 @@ $invoices_result = $conn->query($invoices_query);
           <span class="material-icons-sharp">history</span>
           <h3>Order History</h3>
         </a>
+        <!-- Current page - active -->
         <a href="invoice.php" class="active">
           <span class="material-icons-sharp">receipt</span>
           <h3>Invoice/Receipt</h3>
@@ -142,22 +160,30 @@ $invoices_result = $conn->query($invoices_query);
           <span class="material-icons-sharp">add</span>
           <h3>Add Product</h3>
         </a>
+        <!-- Logout link -->
         <a href="logout.php">
           <span class="material-icons-sharp">logout</span>
           <h3>Logout</h3>
         </a>
       </div>
     </aside>
+    
+    <!-- Main content area -->
     <main>
       <h1>Invoice & Receipt Management</h1>
 
+      <!-- Loop through each invoice result -->
       <?php while ($invoice = $invoices_result->fetch_assoc()): ?>
         <div class="invoice-container">
+          
+          <!-- Invoice header with company and invoice info -->
           <div class="invoice-header">
+            <!-- Company information -->
             <div>
               <h2>FABULOUS FINDS</h2>
               <p>Polangui<br>Albay, 4505<br>Phone: (555) 123-4567</p>
             </div>
+            <!-- Invoice details -->
             <div style="text-align: right;">
               <h2>INVOICE</h2>
               <p>Invoice #: FF<?php echo str_pad($invoice['OrderID'], 6, '0', STR_PAD_LEFT); ?></p>
@@ -165,13 +191,17 @@ $invoices_result = $conn->query($invoices_query);
             </div>
           </div>
 
+          <!-- Customer and seller information -->
           <div class="invoice-details">
+            <!-- Customer (bill to) information -->
             <div>
               <h3>Bill To:</h3>
               <p><strong><?php echo $invoice['CustomerName']; ?></strong><br>
                 <?php echo $invoice['Email']; ?><br>
+                <?php echo $invoice['ContactNo'] ?? ''; ?><br>
                 <?php echo $invoice['Address']; ?></p>
             </div>
+            <!-- Seller (from) information -->
             <div>
               <h3>From:</h3>
               <p><strong><?php echo $invoice['SellerName']; ?></strong><br>
@@ -179,6 +209,7 @@ $invoices_result = $conn->query($invoices_query);
             </div>
           </div>
 
+          <!-- Invoice items table -->
           <div class="invoice-items">
             <table>
               <thead>
@@ -200,9 +231,11 @@ $invoices_result = $conn->query($invoices_query);
             </table>
           </div>
 
+          <!-- Invoice totals and payment info -->
           <div class="invoice-total">
             <p>Total: ₱<?php echo number_format($invoice['Amount'] ?? 0, 2); ?></p>
             <p>Payment Method: <?php 
+              // Format payment method for display
               if (isset($invoice['PaymentMethod'])) {
                 if ($invoice['PaymentMethod'] == 'gcash') {
                   echo 'GCash';
@@ -217,24 +250,33 @@ $invoices_result = $conn->query($invoices_query);
                 echo 'N/A';
               }
             ?></p>
+            <!-- Order status with color coding -->
             <p>Status: <span class="<?php echo $invoice['Status'] == 'Completed' ? 'success' : ($invoice['Status'] == 'Cancelled' ? 'danger' : 'warning'); ?>">
                 <?php echo $invoice['Status']; ?>
               </span></p>
           </div>
 
+          <!-- Print button for this invoice -->
           <button class="print-btn" onclick="window.print()">Print Invoice</button>
         </div>
       <?php endwhile; ?>
     </main>
+    
+    <!-- Right sidebar -->
     <div class="right">
       <div class="top">
+        <!-- Mobile menu toggle -->
         <button id="menu-btn">
           <span class="primary material-icons-sharp">menu</span>
         </button>
+        
+        <!-- Theme toggle -->
         <div class="theme-toggler">
           <span class="material-icons-sharp active">light_mode</span>
           <span class="material-icons-sharp">dark_mode</span>
         </div>
+        
+        <!-- Admin profile section -->
         <div class="profile">
           <div class="info">
             <p>Hey, <b>Admin</b></p>
@@ -247,9 +289,13 @@ $invoices_result = $conn->query($invoices_query);
       </div>
     </div>
   </div>
-  </div>
+  
+  <!-- Admin dashboard JavaScript -->
   <script src="../assets/js/admin-js.js"></script>
-  </body>
+</body>
 
 </html>
-<?php $conn->close(); ?>
+<?php 
+// Close database connection
+$conn->close(); 
+?>

@@ -1,12 +1,14 @@
 <?php
+// Start session for admin authentication
 session_start();
 
-// Direct database connection
+// Database connection configuration
 $host = "localhost";
 $user = "root";
 $password = "";
 $database = "fabulous_finds";
 
+// Establish database connection
 $conn = mysqli_connect($host, $user, $password, $database);
 
 // Check connection
@@ -14,24 +16,24 @@ if (!$conn) {
   die("Database connection failed: " . mysqli_connect_error());
 }
 
-// Sales report data - EXCLUDE CANCELLED ORDERS
+// Sales report data - Last 7 days performance
 $sales_report_query = "
     SELECT 
-        DATE(o.OrderDate) as order_date,
-        COUNT(*) as order_count,
-        SUM(py.Amount) as daily_revenue,
-        AVG(py.Amount) as avg_order_value
+        DATE(o.OrderDate) as order_date,      -- Date portion only
+        COUNT(*) as order_count,              -- Number of orders per day
+        SUM(py.Amount) as daily_revenue,      -- Total revenue per day
+        AVG(py.Amount) as avg_order_value     -- Average order value per day
     FROM orders o
     LEFT JOIN payment py ON o.OrderID = py.OrderID
-    WHERE o.OrderDate >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-    AND o.Status != 'Cancelled'
-    AND o.Status != 'Pending'
-    GROUP BY DATE(o.OrderDate)
-    ORDER BY order_date DESC
+    WHERE o.OrderDate >= DATE_SUB(NOW(), INTERVAL 7 DAY) -- Last 7 days
+    AND o.Status != 'Cancelled'               -- Exclude cancelled orders
+    AND o.Status != 'Pending'                 -- Exclude pending orders
+    GROUP BY DATE(o.OrderDate)                -- Group by date
+    ORDER BY order_date DESC                  -- Show newest dates first
 ";
 $sales_report_result = $conn->query($sales_report_query);
 
-// Inventory report (this one doesn't need changes as it's about stock levels)
+// Inventory report - Product stock analysis
 $inventory_report_query = "
     SELECT 
         p.ProductName,
@@ -39,12 +41,12 @@ $inventory_report_query = "
         p.Price,
         p.StockQuantity,
         s.Name as SellerName,
-        COUNT(od.ProductID) as times_ordered
+        COUNT(od.ProductID) as times_ordered  -- How many times product was ordered
     FROM product p
-    LEFT JOIN seller s ON p.SellerID = s.SellerID
-    LEFT JOIN orderdetails od ON p.ProductID = od.ProductID
-    GROUP BY p.ProductID
-    ORDER BY p.StockQuantity ASC
+    LEFT JOIN seller s ON p.SellerID = s.SellerID     -- Seller info
+    LEFT JOIN orderdetails od ON p.ProductID = od.ProductID -- Order history
+    GROUP BY p.ProductID                       -- Group by product
+    ORDER BY p.StockQuantity ASC               -- Sort by lowest stock first
 ";
 $inventory_report_result = $conn->query($inventory_report_query);
 ?>
@@ -60,18 +62,25 @@ $inventory_report_result = $conn->query($inventory_report_query);
   <title>Reports - Fabulous Finds</title>
 </head>
 
-<body">
+<body>
+  <!-- Main admin container -->
   <div class="container">
+    
+    <!-- Left sidebar navigation -->
     <aside>
       <div class="top">
+        <!-- Brand logo and name -->
         <div class="logo">
           <img src="../assets/img/Fabulous-finds.png" alt="Logo" class="site-logo" />
           <h2>FABULOUS <span class="primary">FINDS</span></h2>
         </div>
+        <!-- Close button for mobile -->
         <div class="close" id="close-btn">
           <span class="material-icons-sharp">close</span>
         </div>
       </div>
+      
+      <!-- Navigation menu -->
       <div class="sidebar">
         <a href="index.php">
           <span class="material-icons-sharp">grid_view</span>
@@ -97,6 +106,7 @@ $inventory_report_result = $conn->query($inventory_report_query);
           <span class="material-icons-sharp">receipt</span>
           <h3>Invoice/Receipt</h3>
         </a>
+        <!-- Current page - active -->
         <a href="reports.php" class="active">
           <span class="material-icons-sharp">assessment</span>
           <h3>Reports</h3>
@@ -105,15 +115,19 @@ $inventory_report_result = $conn->query($inventory_report_query);
           <span class="material-icons-sharp">add</span>
           <h3>Add Product</h3>
         </a>
+        <!-- Logout link -->
         <a href="logout.php">
           <span class="material-icons-sharp">logout</span>
           <h3>Logout</h3>
         </a>
       </div>
     </aside>
+    
+    <!-- Main content area -->
     <main>
       <h1>Sales & Inventory Reports</h1>
 
+      <!-- Sales Report Section -->
       <div class="recent-orders">
         <h2>Sales Report (Last 7 Days)</h2>
         <table>
@@ -126,11 +140,19 @@ $inventory_report_result = $conn->query($inventory_report_query);
             </tr>
           </thead>
           <tbody>
+            <!-- Loop through daily sales data -->
             <?php while ($report = $sales_report_result->fetch_assoc()): ?>
               <tr>
+                <!-- Date formatted for readability -->
                 <td><?php echo date('M j, Y', strtotime($report['order_date'])); ?></td>
+                
+                <!-- Number of orders that day -->
                 <td><?php echo $report['order_count']; ?></td>
+                
+                <!-- Daily revenue with currency formatting -->
                 <td>₱<?php echo number_format($report['daily_revenue'] ?? 0, 2); ?></td>
+                
+                <!-- Average order value for the day -->
                 <td>₱<?php echo number_format($report['avg_order_value'] ?? 0, 2); ?></td>
               </tr>
             <?php endwhile; ?>
@@ -138,6 +160,7 @@ $inventory_report_result = $conn->query($inventory_report_query);
         </table>
       </div>
 
+      <!-- Inventory Report Section -->
       <div class="recent-orders" style="margin-top: 2rem;">
         <h2>Inventory Report</h2>
         <table>
@@ -152,15 +175,27 @@ $inventory_report_result = $conn->query($inventory_report_query);
             </tr>
           </thead>
           <tbody>
+            <!-- Loop through inventory data -->
             <?php while ($inventory = $inventory_report_result->fetch_assoc()): ?>
               <tr>
+                <!-- Product name -->
                 <td><?php echo $inventory['ProductName']; ?></td>
+                
+                <!-- Product category -->
                 <td><?php echo $inventory['Category']; ?></td>
+                
+                <!-- Product price with currency formatting -->
                 <td>₱<?php echo number_format($inventory['Price'], 2); ?></td>
+                
+                <!-- Stock quantity with warning color for low stock (<10) -->
                 <td class="<?php echo $inventory['StockQuantity'] < 10 ? 'danger' : 'success'; ?>">
                   <?php echo $inventory['StockQuantity']; ?>
                 </td>
+                
+                <!-- Number of times product has been ordered -->
                 <td><?php echo $inventory['times_ordered']; ?></td>
+                
+                <!-- Seller name -->
                 <td><?php echo $inventory['SellerName']; ?></td>
               </tr>
             <?php endwhile; ?>
@@ -168,15 +203,22 @@ $inventory_report_result = $conn->query($inventory_report_query);
         </table>
       </div>
     </main>
+    
+    <!-- Right sidebar -->
     <div class="right">
       <div class="top">
+        <!-- Mobile menu toggle -->
         <button id="menu-btn">
           <span class="primary material-icons-sharp">menu</span>
         </button>
+        
+        <!-- Theme toggle -->
         <div class="theme-toggler">
           <span class="material-icons-sharp active">light_mode</span>
           <span class="material-icons-sharp">dark_mode</span>
         </div>
+        
+        <!-- Admin profile section -->
         <div class="profile">
           <div class="info">
             <p>Hey, <b>Admin</b></p>
@@ -189,9 +231,13 @@ $inventory_report_result = $conn->query($inventory_report_query);
       </div>
     </div>
   </div>
-  </div>
+  
+  <!-- Admin dashboard JavaScript -->
   <script src="../assets/js/admin-js.js"></script>
-  </body>
+</body>
 
 </html>
-<?php $conn->close(); ?>
+<?php 
+// Close database connection
+$conn->close(); 
+?>
